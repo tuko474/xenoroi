@@ -18,7 +18,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden;font-family:var(--f-body);user-select:none;-webkit-user-select:none}
-#c{position:fixed;inset:0;display:block;touch-action:none}
+#c{position:fixed;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
 button{font:inherit;touch-action:manipulation;cursor:pointer}
 .hud{position:fixed;font-family:var(--f-data);font-size:13px;pointer-events:none;transition:opacity .3s}
 body:not(.playing) .hud{opacity:0}
@@ -176,11 +176,11 @@ const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), clamp=
 
 function resize(){
   DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
-  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR); cv.style.width=W+'px'; cv.style.height=H+'px';
   lc.width=Math.max(1,Math.round(W*DPR/2)); lc.height=Math.max(1,Math.round(H*DPR/2));
   SC=clamp(Math.min(W,H)/520,.6,1.25);
 }
-addEventListener('resize',resize); resize();
+addEventListener('resize',resize); addEventListener('orientationchange',()=>setTimeout(resize,250)); resize();
 
 /* ---------- save ---------- */
 const DEF=()=>({level:1,money:0,owned:{pistol:1},up:{pistol:[0,0]},hp:0,arm:0,spd:0,cur:'pistol',best:1,muted:false});
