@@ -115,7 +115,7 @@ body:not(.playing) .hud{opacity:0}
   <div id="wbar"></div>
 </div>
 <div id="bn"><h2 id="bnh"></h2><p id="bnp"></p></div>
-<div id="rot"><div class="ph"></div><b>Поверни телефон</b><p>Ксенорой играется горизонтально: левый палец — ходьба, правый — огонь.</p></div>
+<div id="rot"><div class="ph"></div><b>Поверни телефон</b><p>Ксенорой играется горизонтально: левый палец — ходьба, тап справа — огонь.</p></div>
 
 <section class="screen" id="menu" hidden>
   <div class="panel">
@@ -127,7 +127,7 @@ body:not(.playing) .hud{opacity:0}
       <button class="btn warn sm" id="mreset">Сбросить прогресс</button>
     </div>
     <div class="hint">
-      <div><b>Телефон:</b> левый палец — ходьба, правый палец — прицел и огонь. Лучше держать горизонтально.</div>
+      <div><b>Телефон:</b> левый палец — ходьба, тап по правой половине — огонь туда, куда ткнул (держи — очередь). Лучше держать горизонтально.</div>
       <div><b>Клавиатура:</b> WASD — ходьба, мышь — прицел, ЛКМ — огонь, 1–5 — оружие, P — пауза.</div>
       <div><b>Цель сектора:</b> уничтожь все гнёзда — откроется выход.</div>
       <div id="ver"></div>
@@ -190,7 +190,7 @@ let S=load();
 
 /* ---------- data ---------- */
 const WP=[
-  {id:'pistol', name:'Пистолет',  key:'1',price:0,  dmg:13,rate:4,  spread:.05,n:1,spd:780,col:'#ffd98a',pierce:0,splash:0,  shake:1,  snd:'p',len:12},
+  {id:'pistol', name:'Пистолет',  key:'1',price:0,  dmg:13,rate:5,  spread:.05,n:1,spd:780,col:'#ffd98a',pierce:0,splash:0,  shake:1,  snd:'p',len:12},
   {id:'smg',    name:'Автомат',   key:'2',price:150,dmg:9, rate:11, spread:.13,n:1,spd:860,col:'#ffe9a8',pierce:0,splash:0,  shake:1.6,snd:'p',len:18},
   {id:'shotgun',name:'Дробовик',  key:'3',price:260,dmg:11,rate:1.6,spread:.32,n:7,spd:720,col:'#ffc070',pierce:0,splash:0,  shake:5,  snd:'s',len:20},
   {id:'plasma', name:'Плазмаган', key:'4',price:520,dmg:34,rate:2.6,spread:.02,n:1,spd:600,col:'#7cf3ff',pierce:3,splash:55, shake:3,  snd:'z',len:20},
@@ -203,7 +203,7 @@ const BODY=[
   {k:'spd',name:'Сервоприводы', desc:'+8% к скорости',   max:4,base:80},
 ];
 const ET={
-  crawler:{hp:30, spd:112,dmg:8, r:13,rew:3, c1:'#4f6b2a',c2:'#a6d952',leg:'#2a3a15'},
+  crawler:{hp:30, spd:112,dmg:6, r:13,rew:3, c1:'#4f6b2a',c2:'#a6d952',leg:'#2a3a15'},
   runner: {hp:16, spd:190,dmg:5, r:9, rew:2, c1:'#7a4a26',c2:'#ffb066',leg:'#3e240e'},
   spitter:{hp:48, spd:82, dmg:9, r:14,rew:7, c1:'#245a52',c2:'#5effd2',leg:'#103430',ranged:1},
   brute:  {hp:170,spd:66, dmg:22,r:21,rew:15,c1:'#4a2d5e',c2:'#d68bff',leg:'#22132d'},
@@ -395,7 +395,7 @@ function spawnWave(){
   const cand=[];for(let i=0;i<fd.length;i++)if(fd[i]>=8&&fd[i]<=18)cand.push(i);
   if(!cand.length)return;
   const pts=[cand[Math.random()*cand.length|0],cand[Math.random()*cand.length|0]];
-  const n=Math.min(40,5+G.lv*2+G.wave*2);
+  const n=Math.min(40,3+G.lv*2+G.wave*2);
   for(let i=0;i<n&&G.en.length<120;i++){const c=pts[i%2],x=(c%MW+.5)*T+rnd(-14,14),y=(((c/MW)|0)+.5)*T+rnd(-14,14);
     spawnEnemy(G.wave%3===0&&G.lv>=2&&i<2?'brute':pickType(G.lv),x,y)}
   banner('ВОЛНА '+G.wave,'Рой идёт на тебя'); sfx('alarm');
@@ -410,7 +410,8 @@ function fire(){
   for(let i=0;i<w.n;i++){
     const a=p.a+(w.n>1?(i/(w.n-1)-.5)*w.spread*2+rnd(-.04,.04):rnd(-w.spread,w.spread));
     const v=w.spd*(w.n>1?rnd(.85,1.08):1);
-    G.bu.push({x:mxp,y:myp,vx:Math.cos(a)*v,vy:Math.sin(a)*v,dmg:w.dmg,life:w.id==='shotgun'?.42:1.3,pierce:w.pierce,splash:w.splash,col:w.col,id:w.id,hits:[],r:w.id==='plasma'?6:w.id==='rocket'?5:3});
+    // пуля стартует из центра персонажа — так она попадает и в монстра, стоящего вплотную
+    G.bu.push({x:p.x,y:p.y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,dmg:w.dmg,life:w.id==='shotgun'?.42:1.3,pierce:w.pierce,splash:w.splash,col:w.col,id:w.id,hits:[],r:w.id==='plasma'?6:w.id==='rocket'?5:3});
   }
   light(mxp,myp,w.id==='plasma'?150:130,.07);
   part(mxp,myp,w.col,w.n>1?6:3,220,.12,2.5);
@@ -418,7 +419,7 @@ function fire(){
 }
 function hurtEnemy(e,d,nx,ny){
   if(e.dead)return;
-  e.hp-=d;e.hit=.08;
+  e.hp-=d;e.hit=.08;e.stun=.12;
   const kb=Math.min(7,d*.18)*(e.t==='brute'?.3:1);e.x+=nx*kb;e.y+=ny*kb;
   part(e.x,e.y,ET[e.t].c2,2,140,.3,2.5);
   if(e.hp<=0)killEnemy(e);
@@ -482,7 +483,13 @@ function update(dt){
 
   let firing=false;
   const rs=sticks.R;
-  if(rs.on&&Math.hypot(rs.dx,rs.dy)>.2){p.a=Math.atan2(rs.dy,rs.dx);firing=true}
+  if(rs.on){
+    // тап / удержание: стреляем туда, где палец; рядом с монстром — наводимся на него
+    let tx=G.cam.x+(rs.x-W/2)/SC,ty=G.cam.y+(rs.y-H/2)/SC,bd=90*90;
+    for(const e of G.en){const dx=e.x-tx,dy=e.y-ty,d=dx*dx+dy*dy;if(d<bd){bd=d;rs.tx=e.x;rs.ty=e.y}}
+    for(const n of G.nests){if(n.hp<=0)continue;const dx=n.x-tx,dy=n.y-ty,d=dx*dx+dy*dy;if(d<bd){bd=d;rs.tx=n.x;rs.ty=n.y}}
+    if(bd<90*90){tx=rs.tx;ty=rs.ty;rs.lock=true}else rs.lock=false;
+    rs.wx=tx;rs.wy=ty;p.a=Math.atan2(ty-p.y,tx-p.x);firing=true}
   else if(mouse.active&&!touchMode){const wx=G.cam.x+(mouse.x-W/2)/SC,wy=G.cam.y+(mouse.y-H/2)/SC;p.a=Math.atan2(wy-p.y,wx-p.x);firing=mouse.down}
   else if(ml>.1)p.a=Math.atan2(mvy,mvx);
   if(firing&&p.cd<=0){fire();p.cd=1/wstat(S.cur).rate+Math.max(p.cd,-.03)}
@@ -519,15 +526,18 @@ function update(dt){
       if(e.cd<=0){e.cd=rnd(1.4,2.2);const a=face+rnd(-.08,.08);G.eb.push({x:e.x+Math.cos(a)*e.r,y:e.y+Math.sin(a)*e.r,vx:Math.cos(a)*300,vy:Math.sin(a)*300,life:2.2,dmg:e.dmg});sfx('spit')}
     }
     const vx=tx-e.x,vy=ty-e.y,vl=Math.hypot(vx,vy);
-    if(vl>2){e.x+=vx/vl*e.spd*dt;e.y+=vy/vl*e.spd*dt}
+    e.stun=Math.max(0,(e.stun||0)-dt);const es=e.stun>0?.35:1;
+    if(vl>2){e.x+=vx/vl*e.spd*es*dt;e.y+=vy/vl*e.spd*es*dt}
     const ta=face!==null?face:(vl>2?Math.atan2(vy,vx):e.a);
     const da=((ta-e.a+Math.PI*3)%TAU)-Math.PI;e.a+=da*Math.min(1,dt*10);
-    if(dp<e.r+p.r+3&&e.atk<=0){e.atk=.7;hurtPlayer(e.dmg)}
+    if(dp<e.r+p.r+3&&e.atk<=0){e.atk=1;hurtPlayer(e.dmg)}
   }
   const en=G.en;
   for(let i=0;i<en.length;i++){const a=en[i];if(a.dead)continue;
     for(let j=i+1;j<en.length;j++){const b=en[j];if(b.dead)continue;const dx=b.x-a.x,dy=b.y-a.y,m=a.r+b.r;
       if(dx>m||dx<-m||dy>m||dy<-m)continue;const d=Math.hypot(dx,dy);if(d<m&&d>.01){const k=(m-d)/d*.5;a.x-=dx*k;a.y-=dy*k;b.x+=dx*k;b.y+=dy*k}}
+    // монстр не залезает на персонажа — останавливается вплотную перед ним
+    {const dx=a.x-p.x,dy=a.y-p.y,m=a.r+p.r,d=Math.hypot(dx,dy);if(d<m){if(d>.01){a.x=p.x+dx/d*m;a.y=p.y+dy/d*m}else{a.x=p.x+m}}}
     collide(a)}
   G.en=en.filter(e=>!e.dead);
 
@@ -535,9 +545,11 @@ function update(dt){
     if(b.dead)continue;
     b.life-=dt;if(b.life<=0){b.dead=true;if(b.splash)explode(b.x,b.y,b.splash,b.dmg*.7);continue}
     if(b.id==='rocket')part(b.x,b.y,'#ffb070',1,40,.35,3);
-    for(let s=0;s<2&&!b.dead;s++){
-      b.x+=b.vx*dt/2;b.y+=b.vy*dt/2;
-      if(solidAt(b.x,b.y)){b.dead=true;b.x-=b.vx*dt/2;b.y-=b.vy*dt/2;
+    // мелкие шаги по 8px: быстрая пуля не перескакивает через монстра
+    const steps=Math.max(1,Math.ceil(Math.hypot(b.vx,b.vy)*dt/8)),sdt=dt/steps;
+    for(let s=0;s<steps&&!b.dead;s++){
+      b.x+=b.vx*sdt;b.y+=b.vy*sdt;
+      if(solidAt(b.x,b.y)){b.dead=true;b.x-=b.vx*sdt;b.y-=b.vy*sdt;
         if(b.splash)explode(b.x,b.y,b.splash,b.dmg*.7);else{part(b.x,b.y,'#ffe6a0',4,160,.18,2);light(b.x,b.y,50,.05)}break}
       const sp=Math.hypot(b.vx,b.vy),nx=b.vx/sp,ny=b.vy/sp;
       for(const e of G.en){if(e.dead||b.hits.includes(e))continue;const dx=e.x-b.x,dy=e.y-b.y,m=e.r+b.r;
@@ -700,7 +712,17 @@ function draw(){
       const ox=s.on?s.ox:hx,oy=s.on?s.oy:H-110;
       ctx.globalAlpha=s.on?1:.45;ctx.strokeStyle='rgba(216,227,220,.28)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ox,oy,SR,0,TAU);ctx.stroke();
       ctx.fillStyle=col;ctx.beginPath();ctx.arc(ox+s.dx*SR,oy+s.dy*SR,24,0,TAU);ctx.fill();ctx.globalAlpha=1};
-    drawStick(sticks.L,'rgba(242,179,61,.45)',110);drawStick(sticks.R,'rgba(224,71,58,.45)',W-110);
+    drawStick(sticks.L,'rgba(242,179,61,.45)',110);
+    const rs=sticks.R;
+    if(rs.on&&rs.wx!==undefined){
+      const sx=(rs.wx-G.cam.x)*SC+W/2,sy=(rs.wy-G.cam.y)*SC+H/2,r=rs.lock?16:12;
+      ctx.strokeStyle=rs.lock?'rgba(242,179,61,.95)':'rgba(224,71,58,.85)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(sx,sy,r,0,TAU);ctx.stroke();
+      for(const [ax,ay] of [[1,0],[-1,0],[0,1],[0,-1]]){ctx.beginPath();ctx.moveTo(sx+ax*(r-5),sy+ay*(r-5));ctx.lineTo(sx+ax*(r+6),sy+ay*(r+6));ctx.stroke()}
+    }else if(G.t<25){
+      ctx.globalAlpha=.4;ctx.fillStyle='rgba(216,227,220,.55)';ctx.font='600 13px "Exo 2",system-ui,sans-serif';ctx.textAlign='center';
+      ctx.fillText('тапни сюда — огонь',W*.75,H-40);ctx.textAlign='start';ctx.globalAlpha=1;
+    }
   }
   const dmg=G.p.hurtT>0?G.p.hurtT/.35*.6:(G.p.hp/G.p.mhp<.3?.18+.1*Math.sin(G.t*6):0);
   $('#dmg').style.opacity=dmg.toFixed(2);
