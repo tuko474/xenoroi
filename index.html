@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e0d">
 <meta name="app-version" content="dev">
+<meta name="app-store" content="">
 <title>Ксенорой</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Exo+2:wght@400;600;800&family=PT+Mono&display=swap">
@@ -81,6 +82,9 @@ body:not(.playing) .hud{opacity:0}
 .pips i.f{background:var(--acid)}
 .max{font-family:var(--f-data);font-size:11px;color:var(--acid);padding:0 6px}
 .eq{font-family:var(--f-data);font-size:12px;color:var(--hazard)}
+.upd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;background:rgba(155,224,75,.1);border:1px solid var(--acid);color:var(--ink);text-decoration:none}
+.upd span{font-size:15px} .upd span b{color:var(--acid);font-weight:600}
+.upd .btn{background:var(--acid)}
 .stats{display:flex;gap:22px;flex-wrap:wrap;font-family:var(--f-data);font-size:13px;color:var(--dim)}
 .stats b{display:block;font-family:var(--f-disp);font-weight:400;font-size:24px;color:var(--ink)}
 @media (max-height:460px){.title{font-size:clamp(40px,9vh,72px)} .panel{gap:12px} .btn{padding:11px 16px}
@@ -119,6 +123,7 @@ body:not(.playing) .hud{opacity:0}
 
 <section class="screen" id="menu" hidden>
   <div class="panel">
+    <a class="upd" id="upd" hidden><span>Вышла новая версия <b id="updv"></b></span><span class="btn sm">Обновить</span></a>
     <h1 class="title">КСЕНО<em>РОЙ</em></h1>
     <p class="tag">Станция кишит тварями. Пробивайся через лабиринт отсеков, отбивай волны, выжигай гнёзда и ищи выход в следующий сектор.</p>
     <div class="row">
@@ -768,7 +773,7 @@ $('#pquit').addEventListener('click',()=>{paused=false;S.money=G.startMoney+Math
 let resetArm=false;
 function menu(){
   if(!G||G.state!=='idle')prepLevel();
-  show('menu');
+  show('menu');checkUpdate();
   $('#mstart').textContent=S.level>1?`Продолжить · сектор ${S.level}`:'Начать вторжение';
   resetArm=false;$('#mreset').textContent='Сбросить прогресс';$('#mreset').hidden=S.level<=1&&S.money===0;
 }
@@ -846,7 +851,27 @@ function frame(now){
   }else{ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#050706';ctx.fillRect(0,0,W,H)}
   requestAnimationFrame(frame);
 }
-{const v=document.querySelector('meta[name="app-version"]');if(v&&v.content!=='dev')$('#ver').textContent='Версия '+v.content}
+const APP_VERSION=(document.querySelector('meta[name="app-version"]')||{}).content||'dev';
+const APP_STORE=(document.querySelector('meta[name="app-store"]')||{}).content||'';
+if(APP_VERSION!=='dev')$('#ver').textContent='Версия '+APP_VERSION;
+// Есть ли на GitHub сборка новее установленной — тогда в меню плашка «Обновить» со ссылкой на новый APK.
+// Сборка для магазина обновляется через магазин, ей проверка не нужна.
+let updChecked=0;
+async function checkUpdate(){
+  const cur=Number(APP_VERSION.split('.')[2]);
+  if(APP_STORE||!cur||Date.now()-updChecked<5*60*1000)return;
+  updChecked=Date.now();
+  try{
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
+    const r=await fetch('https://api.github.com/repos/tuko474/xenoroi/releases/latest',{signal:ctl.signal,headers:{Accept:'application/vnd.github+json'}});
+    clearTimeout(tm);if(!r.ok)return;
+    const rel=await r.json(),n=Number((/^build-(\d+)$/.exec(rel.tag_name||'')||[])[1]);
+    if(!n||n<=cur)return;
+    const ver='0.1.'+n,file=(rel.assets||[]).find(a=>a.name==='xenoroi-'+ver+'.apk');
+    const bar=$('#upd');bar.href=file?file.browser_download_url:`https://github.com/tuko474/xenoroi/releases/download/build-${n}/xenoroi-${ver}.apk`;
+    $('#updv').textContent=ver;bar.hidden=false;
+  }catch(e){/* нет сети или GitHub недоступен — молчим */}
+}
 muteLabel();menu();requestAnimationFrame(frame);
 })();
 </script>
