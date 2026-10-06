@@ -119,7 +119,7 @@ body:not(.playing) .hud{opacity:0}
   <div id="wbar"></div>
 </div>
 <div id="bn"><h2 id="bnh"></h2><p id="bnp"></p></div>
-<div id="rot"><div class="ph"></div><b>Поверни телефон</b><p>Ксенорой играется горизонтально: левый палец — ходьба, тап справа — огонь.</p></div>
+<div id="rot"><div class="ph"></div><b>Поверни телефон</b><p>Ксенорой играется горизонтально: левый джойстик — ходьба, правый — прицел и огонь.</p></div>
 
 <section class="screen" id="menu" hidden>
   <div class="panel">
@@ -132,7 +132,7 @@ body:not(.playing) .hud{opacity:0}
       <button class="btn warn sm" id="mreset">Сбросить прогресс</button>
     </div>
     <div class="hint">
-      <div><b>Телефон:</b> левый палец — ходьба, тап по правой половине — огонь туда, куда ткнул (держи — очередь). Лучше держать горизонтально.</div>
+      <div><b>Телефон:</b> левый джойстик — ходьба, правый — прицел и огонь: пока палец на нём, персонаж стреляет, отклонение поворачивает прицел. Лучше держать горизонтально.</div>
       <div><b>Клавиатура:</b> WASD — ходьба, мышь — прицел, ЛКМ — огонь, 1–5 — оружие, P — пауза.</div>
       <div><b>Цель сектора:</b> уничтожь все гнёзда — откроется выход.</div>
       <div id="ver"></div>
@@ -489,12 +489,9 @@ function update(dt){
   let firing=false;
   const rs=sticks.R;
   if(rs.on){
-    // тап / удержание: стреляем туда, где палец; рядом с монстром — наводимся на него
-    let tx=G.cam.x+(rs.x-W/2)/SC,ty=G.cam.y+(rs.y-H/2)/SC,bd=90*90;
-    for(const e of G.en){const dx=e.x-tx,dy=e.y-ty,d=dx*dx+dy*dy;if(d<bd){bd=d;rs.tx=e.x;rs.ty=e.y}}
-    for(const n of G.nests){if(n.hp<=0)continue;const dx=n.x-tx,dy=n.y-ty,d=dx*dx+dy*dy;if(d<bd){bd=d;rs.tx=n.x;rs.ty=n.y}}
-    if(bd<90*90){tx=rs.tx;ty=rs.ty;rs.lock=true}else rs.lock=false;
-    rs.wx=tx;rs.wy=ty;p.a=Math.atan2(ty-p.y,tx-p.x);firing=true}
+    // правый джойстик: палец на нём — всегда огонь; отклонение крутит персонажа, прицел и обзор
+    if(Math.hypot(rs.dx,rs.dy)>.15)p.a=Math.atan2(rs.dy,rs.dx);
+    firing=true}
   else if(mouse.active&&!touchMode){const wx=G.cam.x+(mouse.x-W/2)/SC,wy=G.cam.y+(mouse.y-H/2)/SC;p.a=Math.atan2(wy-p.y,wx-p.x);firing=mouse.down}
   else if(ml>.1)p.a=Math.atan2(mvy,mvx);
   if(firing&&p.cd<=0){fire();p.cd=1/wstat(S.cur).rate+Math.max(p.cd,-.03)}
@@ -718,16 +715,9 @@ function draw(){
       ctx.globalAlpha=s.on?1:.45;ctx.strokeStyle='rgba(216,227,220,.28)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ox,oy,SR,0,TAU);ctx.stroke();
       ctx.fillStyle=col;ctx.beginPath();ctx.arc(ox+s.dx*SR,oy+s.dy*SR,24,0,TAU);ctx.fill();ctx.globalAlpha=1};
     drawStick(sticks.L,'rgba(242,179,61,.45)',110);
-    const rs=sticks.R;
-    if(rs.on&&rs.wx!==undefined){
-      const sx=(rs.wx-G.cam.x)*SC+W/2,sy=(rs.wy-G.cam.y)*SC+H/2,r=rs.lock?16:12;
-      ctx.strokeStyle=rs.lock?'rgba(242,179,61,.95)':'rgba(224,71,58,.85)';ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(sx,sy,r,0,TAU);ctx.stroke();
-      for(const [ax,ay] of [[1,0],[-1,0],[0,1],[0,-1]]){ctx.beginPath();ctx.moveTo(sx+ax*(r-5),sy+ay*(r-5));ctx.lineTo(sx+ax*(r+6),sy+ay*(r+6));ctx.stroke()}
-    }else if(G.t<25){
-      ctx.globalAlpha=.4;ctx.fillStyle='rgba(216,227,220,.55)';ctx.font='600 13px "Exo 2",system-ui,sans-serif';ctx.textAlign='center';
-      ctx.fillText('тапни сюда — огонь',W*.75,H-40);ctx.textAlign='start';ctx.globalAlpha=1;
-    }
+    drawStick(sticks.R,'rgba(224,71,58,.5)',W-110);
+    if(!sticks.R.on&&G.t<25){ctx.globalAlpha=.45;ctx.fillStyle='rgba(216,227,220,.6)';ctx.font='600 13px "Exo 2",system-ui,sans-serif';ctx.textAlign='center';
+      ctx.fillText('держи — огонь, веди — прицел',W-110,H-110-SR-12);ctx.fillText('ходьба',110,H-110-SR-12);ctx.textAlign='start';ctx.globalAlpha=1}
   }
   const dmg=G.p.hurtT>0?G.p.hurtT/.35*.6:(G.p.hp/G.p.mhp<.3?.18+.1*Math.sin(G.t*6):0);
   $('#dmg').style.opacity=dmg.toFixed(2);
