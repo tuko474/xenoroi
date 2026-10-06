@@ -1,0 +1,90 @@
+# Сборка Android-версии в облаке GitHub. Ничего не нужно ставить на компьютер.
+# Запускается при каждой загрузке файлов в репозиторий и вручную (Actions → Сборка Android → Run workflow).
+# Готовый .apk появляется в разделе Releases — его можно скачать прямо с телефона.
+
+name: Сборка Android
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      VER: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Установить зависимости
+        run: npm install --no-audit --no-fund
+
+      - name: Собрать игру (шрифты внутрь, без интернета)
+        run: APP_VERSION=$VER npm run build
+
+      - name: Создать Android-проект
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Горизонталь и полный экран
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's/ *android:screenOrientation="[a-zA-Z]*"//' "$M"
+          sed -i 's/android:name=".MainActivity"/android:name=".MainActivity"\n            android:screenOrientation="sensorLandscape"/' "$M"
+          cp tools/android/MainActivity.java android/app/src/main/java/ru/xenoroi/game/MainActivity.java
+          grep -n "screenOrientation" "$M"
+
+      - name: Иконка и заставка
+        continue-on-error: true # если не выйдет — останется стандартная иконка, сборка продолжится
+        run: npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#0b0e0d' --splashBackgroundColor '#0b0e0d'
+
+      - name: Номер версии и постоянный ключ подписи
+        # Один ключ у всех тестовых сборок — новая версия ставится поверх старой, прогресс сохраняется.
+        # Это тестовый ключ. Для RuStore будет отдельный боевой ключ, он в репозиторий не кладётся.
+        run: |
+          G=android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" "$G"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VER\"/" "$G"
+          cp tools/android/xenoroi-test.keystore android/app/xenoroi-test.keystore
+          sed -i '0,/^android {/s//android {\n    signingConfigs {\n        debug {\n            storeFile file("xenoroi-test.keystore")\n            storePassword "android"\n            keyAlias "xenoroi"\n            keyPassword "android"\n        }\n    }/' "$G"
+          grep -n -A7 "signingConfigs" "$G"
+
+      - name: Собрать APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../xenoroi-$VER.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../xenoroi.apk
+
+      - name: Сохранить APK в Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: xenoroi-apk
+          path: xenoroi-0.*.apk
+
+      - name: Опубликовать в Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Ксенорой ${{ env.VER }}
+          body: Тестовая сборка для Android. Скачай xenoroi.apk на телефон и установи (разреши установку из неизвестных источников).
+          files: |
+            xenoroi-0.*.apk
+            xenoroi.apk
+          make_latest: true

@@ -21,9 +21,13 @@
 
 ## Запуск
 
-Открыть `index.html` в браузере. Чтобы играть по ссылке, включи GitHub Pages: Settings → Pages → Deploy from a branch → `main` / root.
+Открыть `index.html` в браузере. На телефоне при старте игра уходит в полный экран и горизонталь.
+
+**APK:** собирается автоматически в GitHub Actions при каждой загрузке (`.github/workflows/android.yml`, Capacitor). Готовый `xenoroi.apk` — в разделе Releases. Подписан постоянным тестовым ключом `tools/android/xenoroi-test.keystore`, поэтому новые версии ставятся поверх старых с сохранением прогресса. Для RuStore понадобится отдельный боевой ключ, его в репозиторий не кладём.
+
+Чтобы играть по ссылке в браузере, включи GitHub Pages: Settings → Pages → Deploy from a branch → `main` / root.
 
 ## Планы
 
-- Обёртка для Android и публикация в RuStore.
+- Публикация в RuStore (боевой ключ, своя сборка).
 - Звук и спрайты, новые типы врагов и боссы, больше локаций.

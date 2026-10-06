@@ -1,0 +1,20 @@
+{
+  "name": "xenoroi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ксенорой — мобильный top-down шутер: лабиринт, волны тварей, гнёзда, прокачка оружия",
+  "scripts": {
+    "build": "node tools/build-www.mjs",
+    "android": "npm run build && npx cap sync android && npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@fontsource/exo-2": "^5.0.0",
+    "@fontsource/pt-mono": "^5.0.0",
+    "@fontsource/russo-one": "^5.0.0"
+  }
+}

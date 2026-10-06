@@ -1,0 +1,7 @@
+{
+  "appId": "ru.xenoroi.game",
+  "appName": "Ксенорой",
+  "webDir": "www",
+  "backgroundColor": "#0b0e0d",
+  "android": { "allowMixedContent": false }
+}
