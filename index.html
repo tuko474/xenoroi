@@ -29,11 +29,11 @@ body:not(.playing) .hud{opacity:0}
 .hp{width:150px;height:12px;background:#1a2220;border:1px solid var(--line);position:relative;overflow:hidden}
 .hp i{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#a12a20,var(--blood) 60%,#ff8a6a)}
 #hpt{font-variant-numeric:tabular-nums;min-width:3ch}
-#mm{width:104px;height:104px;border:1px solid var(--line);background:rgba(0,0,0,.55);image-rendering:pixelated}
+#mm{width:110px;height:110px;border:1px solid var(--line);background:rgba(0,0,0,.7);image-rendering:pixelated}
 #hc{top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);text-align:center;display:grid;gap:2px}
 #sec{font-family:var(--f-disp);font-size:15px;letter-spacing:.14em;color:var(--hazard)}
 #obj{color:var(--ink)} #obj.open{color:var(--acid)}
-#wv{color:var(--dim);font-size:12px}
+#wv{color:var(--dim);font-size:12px} #wv.chaos{color:var(--blood);font-weight:600}
 #hr{top:calc(env(safe-area-inset-top,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 12px);display:grid;justify-items:end;gap:8px}
 #money{font-family:var(--f-disp);font-size:18px;color:var(--hazard);font-variant-numeric:tabular-nums}
 .ctl{display:flex;gap:6px;pointer-events:auto}
@@ -134,7 +134,7 @@ body:not(.playing) .hud{opacity:0}
     <div class="hint">
       <div><b>Телефон:</b> левый джойстик — ходьба, правый — прицел и огонь: пока палец на нём, персонаж стреляет, отклонение поворачивает прицел. Лучше держать горизонтально.</div>
       <div><b>Клавиатура:</b> WASD — ходьба, мышь — прицел, ЛКМ — огонь, 1–5 — оружие, P — пауза.</div>
-      <div><b>Цель сектора:</b> уничтожь все гнёзда — откроется выход.</div>
+      <div><b>Цель сектора:</b> найди и уничтожь все гнёзда, затем найди выход. Карта открывается по мере исследования. После гнёзд начинается хаос — уходи быстрее.</div>
       <div id="ver"></div>
     </div>
   </div>
@@ -176,7 +176,7 @@ const cv=$('#c'),ctx=cv.getContext('2d');
 const lc=document.createElement('canvas'),lx=lc.getContext('2d');
 const mm=$('#mm'),mx=mm.getContext('2d');
 const T=48, TAU=Math.PI*2;
-let W=0,H=0,DPR=1,SC=1;
+let W=0,H=0,DPR=1,SC=1,SR=64;
 const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), clamp=(v,a,b)=>v<a?a:v>b?b:v;
 
 function resize(){
@@ -184,6 +184,7 @@ function resize(){
   cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR); cv.style.width=W+'px'; cv.style.height=H+'px';
   lc.width=Math.max(1,Math.round(W*DPR/2)); lc.height=Math.max(1,Math.round(H*DPR/2));
   SC=clamp(Math.min(W,H)/520,.6,1.25);
+  SR=clamp(Math.min(W,H)*.17,56,88);
 }
 addEventListener('resize',resize); addEventListener('orientationchange',()=>setTimeout(resize,250)); resize();
 
@@ -246,7 +247,7 @@ function sfx(k){
 }
 
 /* ---------- map ---------- */
-let MW=0,MH=0,g=null,fd=null,exitT=null,floorCv=null,decCv=null,dctx=null,mmBase=null;
+let MW=0,MH=0,g=null,fd=null,exitT=null,floorCv=null,decCv=null,dctx=null,mmBase=null,mmCtx=null,seen=null;
 const wall=(tx,ty)=>tx<0||ty<0||tx>=MW||ty>=MH||g[ty*MW+tx]===1;
 const solidAt=(x,y)=>wall(Math.floor(x/T),Math.floor(y/T));
 function bfs(sx,sy,out){
@@ -319,11 +320,26 @@ function renderMap(lv){
     if(x+1<MW&&!g[y*MW+x+1]){const gr=f.createLinearGradient(px+T,0,px+T+10,0);gr.addColorStop(0,'rgba(0,0,0,.35)');gr.addColorStop(1,'rgba(0,0,0,0)');f.fillStyle=gr;f.fillRect(px+T,py,10,T)}
   }
   decCv=document.createElement('canvas');decCv.width=floorCv.width;decCv.height=floorCv.height;dctx=decCv.getContext('2d');
+  // мини-карта пустая: клетки открываются там, где побывал персонаж (см. reveal)
   mmBase=document.createElement('canvas');mmBase.width=MW;mmBase.height=MH;
-  const m=mmBase.getContext('2d'),id=m.createImageData(MW,MH);
-  for(let i=0;i<MW*MH;i++){const o=i*4;if(!g[i]){id.data[o]=70;id.data[o+1]=86;id.data[o+2]=80;id.data[o+3]=255}else{id.data[o+3]=0}}
-  m.putImageData(id,0,0);
+  mmCtx=mmBase.getContext('2d');mmCtx.fillStyle='rgb(70,86,80)';
+  seen=new Uint8Array(MW*MH);
 }
+
+/* ---------- fog of war ---------- */
+// Открываем клетки в радиусе ~5 вокруг персонажа, которые видно (стены закрывают обзор).
+const REV=5;
+function reveal(){
+  const p=G.p,cx=Math.floor(p.x/T),cy=Math.floor(p.y/T);
+  for(let y=cy-REV;y<=cy+REV;y++)for(let x=cx-REV;x<=cx+REV;x++){
+    if(x<0||y<0||x>=MW||y>=MH)continue;const i=y*MW+x;
+    if(seen[i]||g[i])continue;
+    const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy>REV*REV+1)continue;
+    if(!los(p,{x:(x+.5)*T,y:(y+.5)*T}))continue;
+    seen[i]=1;mmCtx.fillRect(x,y,1,1);G.seenN++;
+  }
+}
+const seenAt=(tx,ty)=>seen[ty*MW+tx]===1;
 
 /* ---------- state ---------- */
 let G=null,paused=false;
@@ -334,7 +350,7 @@ function prepLevel(){
     p:{x:1.5*T,y:1.5*T,r:14,a:.6,hp:mh,mhp:mh,cd:0,walk:0,hurtT:0},
     en:[],bu:[],eb:[],pa:[],co:[],li:[],
     nests:ns.map(([x,y])=>({tx:x,ty:y,x:(x+.5)*T,y:(y+.5)*T,r:24,hp:420*(1+.25*(lv-1)),mhp:420*(1+.25*(lv-1)),cd:rnd(1,3),ph:rnd(0,9),hit:0})),
-    exitOpen:ns.length===0,wave:0,waveT:22,earned:0,startMoney:S.money,kills:0,ptile:-1,shake:0,cam:{x:1.5*T+120,y:1.5*T+60}};
+    exitOpen:ns.length===0,wave:0,waveT:22,seenN:0,revT:0,chaos:null,chaosSp:0,exitHint:false,floorN:g.reduce((a,v)=>a+(v?0:1),0),earned:0,startMoney:S.money,kills:0,ptile:-1,shake:0,cam:{x:1.5*T+120,y:1.5*T+60}};
   if(!S.owned[S.cur])S.cur='pistol';
 }
 function startLevel(){
@@ -348,14 +364,18 @@ const keys={};
 const mouse={x:0,y:0,down:false,active:false};
 const sticks={L:{id:null,on:false,ox:0,oy:0,x:0,y:0,dx:0,dy:0},R:{id:null,on:false,ox:0,oy:0,x:0,y:0,dx:0,dy:0}};
 let touchMode=window.matchMedia('(pointer:coarse)').matches;
-const SR=58;
+// Джойстик: мёртвая зона в центре, полный ход уже на 75% радиуса, мягкая кривая;
+// если палец уходит дальше края — основание тянется за ним (не надо возвращать палец).
 function stickUpd(s,x,y){s.x=x;s.y=y;let dx=x-s.ox,dy=y-s.oy,l=Math.hypot(dx,dy);
-  if(l>SR*1.25){const k=(l-SR*1.25)/l;s.ox+=dx*k;s.oy+=dy*k;dx=x-s.ox;dy=y-s.oy;l=Math.hypot(dx,dy)}
-  const m=Math.min(1,l/SR);s.dx=l?dx/l*m:0;s.dy=l?dy/l*m:0}
+  if(l>SR){const k=(l-SR)/l;s.ox+=dx*k;s.oy+=dy*k;dx=x-s.ox;dy=y-s.oy;l=Math.hypot(dx,dy)}
+  s.kx=dx/SR;s.ky=dy/SR;
+  const DZ=.12,full=.75,raw=Math.min(1,l/(SR*full));
+  const m=raw<=DZ?0:Math.pow((raw-DZ)/(1-DZ),1.25);
+  s.dx=l?dx/l*m:0;s.dy=l?dy/l*m:0;s.mag=raw}
 cv.addEventListener('touchstart',e=>{e.preventDefault();initAudio();touchMode=true;mouse.active=false;
-  for(const t of e.changedTouches){const s=t.clientX<W/2?sticks.L:sticks.R;if(s.id!==null)continue;s.id=t.identifier;s.on=true;s.ox=s.x=t.clientX;s.oy=s.y=t.clientY;s.dx=s.dy=0}},{passive:false});
+  for(const t of e.changedTouches){const s=t.clientX<W/2?sticks.L:sticks.R;if(s.id!==null)continue;s.id=t.identifier;s.on=true;s.ox=s.x=t.clientX;s.oy=s.y=t.clientY;s.dx=s.dy=s.kx=s.ky=s.mag=0}},{passive:false});
 cv.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)for(const s of [sticks.L,sticks.R])if(s.id===t.identifier)stickUpd(s,t.clientX,t.clientY)},{passive:false});
-const tend=e=>{for(const t of e.changedTouches)for(const s of [sticks.L,sticks.R])if(s.id===t.identifier){s.id=null;s.on=false;s.dx=s.dy=0}};
+const tend=e=>{for(const t of e.changedTouches)for(const s of [sticks.L,sticks.R])if(s.id===t.identifier){s.id=null;s.on=false;s.dx=s.dy=s.kx=s.ky=s.mag=0}};
 cv.addEventListener('touchend',tend);cv.addEventListener('touchcancel',tend);
 cv.addEventListener('mousemove',e=>{if(touchMode)return;mouse.x=e.clientX;mouse.y=e.clientY;mouse.active=true});
 cv.addEventListener('mousedown',e=>{if(touchMode)return;initAudio();mouse.down=true;mouse.active=true;mouse.x=e.clientX;mouse.y=e.clientY});
@@ -392,20 +412,31 @@ function scorch(x,y,r){const gr=dctx.createRadialGradient(x,y,0,x,y,r);gr.addCol
 function light(x,y,r,life){G.li.push({x,y,r,life,ml:life})}
 function pickType(lv){const r=Math.random();if(lv>=3&&r<.1)return'brute';if(lv>=2&&r<.28)return'spitter';if(r<.62)return'crawler';return'runner'}
 function spawnEnemy(t,x,y){
-  const d=ET[t],lv=G.lv,hs=1+.22*(lv-1);
-  G.en.push({t,x,y,r:d.r,hp:d.hp*hs,mhp:d.hp*hs,spd:d.spd*rnd(.9,1.1)*(1+.03*(lv-1)),dmg:d.dmg*(1+.12*(lv-1)),a:rnd(0,TAU),ph:rnd(0,9),hit:0,atk:0,cd:rnd(1,2.2),dead:false});
+  const d=ET[t],lv=G.lv,hs=(1+.22*(lv-1))*hpMul(),ch=G.chaos!==null?G.chaos:0;
+  G.en.push({t,x,y,r:d.r,hp:d.hp*hs,mhp:d.hp*hs,rm:rewMul(),spd:d.spd*rnd(.9,1.1)*(1+.03*(lv-1))*(1+Math.min(.35,ch/120)),dmg:d.dmg*(1+.12*(lv-1)),a:rnd(0,TAU),ph:rnd(0,9),hit:0,atk:0,cd:rnd(1,2.2),dead:false});
 }
 function spawnWave(){
   G.wave++;
   const cand=[];for(let i=0;i<fd.length;i++)if(fd[i]>=8&&fd[i]<=18)cand.push(i);
   if(!cand.length)return;
   const pts=[cand[Math.random()*cand.length|0],cand[Math.random()*cand.length|0]];
-  const n=Math.min(40,3+G.lv*2+G.wave*2);
+  const n=Math.min(G.chaos!==null?60:40,Math.round(3+G.lv*2+G.wave*2+G.t/30+(G.chaos!==null?6+G.chaos/5:0)));
   for(let i=0;i<n&&G.en.length<120;i++){const c=pts[i%2],x=(c%MW+.5)*T+rnd(-14,14),y=(((c/MW)|0)+.5)*T+rnd(-14,14);
     spawnEnemy(G.wave%3===0&&G.lv>=2&&i<2?'brute':pickType(G.lv),x,y)}
-  banner('ВОЛНА '+G.wave,'Рой идёт на тебя'); sfx('alarm');
+  if(G.chaos===null){banner('ВОЛНА '+G.wave,'Рой идёт на тебя');sfx('alarm')}
 }
-function maxEn(){return 40+G.lv*5}
+function maxEn(){return 40+G.lv*5+(G.chaos!==null?Math.min(60,G.chaos*.8|0):0)}
+// чем дольше в секторе, тем крепче твари; в хаосе — ещё быстрее
+function hpMul(){return 1+G.t/240+(G.chaos!==null?G.chaos/40:0)}
+// в хаосе за тварей платят всё меньше — фармить у выхода невыгодно
+function rewMul(){return G.chaos===null?1:Math.max(.15,1-G.chaos/50)}
+// бонус за быстрый выход после начала хаоса, тает со временем
+function exitBonus(){return G.chaos===null?0:Math.max(0,Math.round((45-G.chaos)*(3+G.lv*1.5)))}
+function spawnRing(){const cand=[];for(let i=0;i<fd.length;i++)if(fd[i]>=7&&fd[i]<=16)cand.push(i);return cand}
+function startChaos(){
+  G.chaos=0;G.chaosSp=1.2;G.waveT=6;G.exitOpen=true;
+  banner('РЕЖИМ ХАОСА','Гнёзд нет — рой обезумел. Найди выход, пока он не стал сильнее');sfx('alarm');
+}
 
 /* ---------- combat ---------- */
 function fire(){
@@ -432,7 +463,7 @@ function hurtEnemy(e,d,nx,ny){
 function killEnemy(e){
   e.dead=true;const d=ET[e.t];G.kills++;
   splat(e.x,e.y,d.c1,e.r);part(e.x,e.y,d.c2,10,200,.5,3);sfx('die');
-  const v=Math.round(d.rew*(1+.15*(G.lv-1)));
+  const v=Math.max(1,Math.round(d.rew*(1+.15*(G.lv-1))*(e.rm||1)));
   G.co.push({x:e.x,y:e.y,v,kind:'coin',t:0,vx:rnd(-60,60),vy:rnd(-60,60)});
   if(Math.random()<.045)G.co.push({x:e.x+8,y:e.y,kind:'med',t:0,vx:rnd(-40,40),vy:rnd(-40,40)});
 }
@@ -445,7 +476,7 @@ function hurtNest(n,d){
     for(let i=0;i<6;i++)G.co.push({x:n.x,y:n.y,v:Math.round(8+G.lv*2),kind:'coin',t:0,vx:rnd(-160,160),vy:rnd(-160,160)});
     G.co.push({x:n.x,y:n.y,kind:'med',t:0,vx:rnd(-80,80),vy:rnd(-80,80)});
     const left=G.nests.filter(q=>q.hp>0).length;
-    if(left===0){G.exitOpen=true;banner('ВЫХОД ОТКРЫТ','Иди к зелёному маяку — он на мини-карте');sfx('heal')}
+    if(left===0)startChaos();
     else banner('ГНЕЗДО УНИЧТОЖЕНО',`Осталось: ${left}`);
   }
 }
@@ -469,9 +500,10 @@ function die(){
 }
 function winLevel(){
   G.state='won';
-  const lv=G.lv,earned=G.earned,kills=G.kills;
+  const bonus=exitBonus();S.money+=bonus;G.earned+=bonus;
+  const lv=G.lv,earned=G.earned,kills=G.kills,explored=Math.round(G.seenN/G.floorN*100);
   S.level=lv+1;S.best=Math.max(S.best,S.level);save();sfx('heal');
-  shop(`Сектор ${lv} зачищен`,`+¢ ${earned} · убито ${kills} · дальше сектор ${S.level}`);
+  shop(`Сектор ${lv} зачищен`,`+¢ ${earned}${bonus?` (бонус за выход ¢${bonus})`:''} · убито ${kills} · исследовано ${explored}% · дальше сектор ${S.level}`);
 }
 
 /* ---------- update ---------- */
@@ -482,25 +514,39 @@ function update(dt){
   if(sticks.L.on){mvx=sticks.L.dx;mvy=sticks.L.dy}
   else{mvx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);mvy=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0)}
   let ml=Math.hypot(mvx,mvy);if(ml>1){mvx/=ml;mvy/=ml;ml=1}
-  const sp=pSpd();p.x+=mvx*sp*dt;p.y+=mvy*sp*dt;
+  // плавный разгон и торможение (~70 мс) вместо рывков
+  const sp=pSpd(),ka=1-Math.exp(-dt*(ml>0?15:20));
+  p.vx=(p.vx||0)+(mvx*sp-(p.vx||0))*ka;p.vy=(p.vy||0)+(mvy*sp-(p.vy||0))*ka;
+  p.x+=p.vx*dt;p.y+=p.vy*dt;
   for(const n of G.nests){if(n.hp<=0)continue;const dx=p.x-n.x,dy=p.y-n.y,d=Math.hypot(dx,dy),m=p.r+n.r;if(d<m&&d>0){p.x=n.x+dx/d*m;p.y=n.y+dy/d*m}}
   collide(p);p.walk+=ml*dt*12;p.hurtT=Math.max(0,p.hurtT-dt);
 
   let firing=false;
   const rs=sticks.R;
+  // поворот к цели плавный: быстрый на больших углах, без дёрганья на мелких
+  const turn=(ta,rate)=>{const da=((ta-p.a+Math.PI*3)%TAU)-Math.PI;p.a+=da*(1-Math.exp(-dt*rate))};
   if(rs.on){
     // правый джойстик: палец на нём — всегда огонь; отклонение крутит персонажа, прицел и обзор
-    if(Math.hypot(rs.dx,rs.dy)>.15)p.a=Math.atan2(rs.dy,rs.dx);
+    if(rs.mag>.12)turn(Math.atan2(rs.ky,rs.kx),22);
     firing=true}
   else if(mouse.active&&!touchMode){const wx=G.cam.x+(mouse.x-W/2)/SC,wy=G.cam.y+(mouse.y-H/2)/SC;p.a=Math.atan2(wy-p.y,wx-p.x);firing=mouse.down}
-  else if(ml>.1)p.a=Math.atan2(mvy,mvx);
+  else if(ml>.1)turn(Math.atan2(mvy,mvx),12);
   if(firing&&p.cd<=0){fire();p.cd=1/wstat(S.cur).rate+Math.max(p.cd,-.03)}
   p.cd=firing?p.cd-dt:Math.max(0,p.cd-dt);
 
   const ptx=Math.floor(p.x/T),pty=Math.floor(p.y/T),pt=pty*MW+ptx;
   if(pt!==G.ptile){G.ptile=pt;bfs(ptx,pty,fd)}
+  G.revT-=dt;if(G.revT<=0){G.revT=.12;reveal()}
 
-  G.waveT-=dt;if(G.waveT<=0){spawnWave();G.waveT=Math.max(18,32-G.lv)}
+  G.waveT-=dt;if(G.waveT<=0){spawnWave();G.waveT=G.chaos!==null?Math.max(5,11-G.chaos/12):Math.max(12,32-G.lv-G.t/20)}
+  if(G.chaos!==null){
+    G.chaos+=dt;
+    if(G.chaos>25&&!G.exitHint&&!seenAt(exitT.x,exitT.y)){G.exitHint=true;banner('МАЯК ВЫХОДА','Сигнал выхода появился на мини-карте')}
+    G.chaosSp-=dt;
+    if(G.chaosSp<=0){G.chaosSp=Math.max(.22,1.3-G.chaos/35);
+      if(G.en.length<maxEn()){const c=spawnRing();if(c.length){const i=c[Math.random()*c.length|0];
+        spawnEnemy(Math.random()<Math.min(.25,G.chaos/200)?'brute':pickType(Math.max(3,G.lv)),(i%MW+.5)*T+rnd(-12,12),(((i/MW)|0)+.5)*T+rnd(-12,12))}}}
+  }
   for(const n of G.nests){
     if(n.hp<=0)continue;n.ph+=dt;n.hit=Math.max(0,n.hit-dt);n.cd-=dt;
     const nd=fd[n.ty*MW+n.tx];
@@ -593,8 +639,8 @@ function update(dt){
 
   if(G.exitOpen&&ptx===exitT.x&&pty===exitT.y){winLevel();return}
 
-  const k=Math.min(1,dt*7);
-  G.cam.x+=(p.x+Math.cos(p.a)*50-G.cam.x)*k;G.cam.y+=(p.y+Math.sin(p.a)*50-G.cam.y)*k;
+  const k=1-Math.exp(-dt*6);
+  G.cam.x+=(p.x+Math.cos(p.a)*45-G.cam.x)*k;G.cam.y+=(p.y+Math.sin(p.a)*45-G.cam.y)*k;
   hud();
 }
 
@@ -710,15 +756,20 @@ function draw(){
   ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(lc,0,0,cv.width,cv.height);
   ctx.setTransform(DPR,0,0,DPR,0,0);
   if(G.state==='play'&&touchMode){
-    const drawStick=(s,col,hx)=>{
-      const ox=s.on?s.ox:hx,oy=s.on?s.oy:H-110;
-      ctx.globalAlpha=s.on?1:.45;ctx.strokeStyle='rgba(216,227,220,.28)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ox,oy,SR,0,TAU);ctx.stroke();
-      ctx.fillStyle=col;ctx.beginPath();ctx.arc(ox+s.dx*SR,oy+s.dy*SR,24,0,TAU);ctx.fill();ctx.globalAlpha=1};
-    drawStick(sticks.L,'rgba(242,179,61,.45)',110);
-    drawStick(sticks.R,'rgba(224,71,58,.5)',W-110);
+    const hx=SR+40,hy=H-SR-34;
+    const drawStick=(s,col,bx)=>{
+      const ox=s.on?s.ox:bx,oy=s.on?s.oy:hy,kx=s.on?(s.kx||0):0,ky=s.on?(s.ky||0):0;
+      ctx.globalAlpha=s.on?1:.45;
+      ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.arc(ox,oy,SR,0,TAU);ctx.fill();
+      ctx.strokeStyle='rgba(216,227,220,.3)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ox,oy,SR,0,TAU);ctx.stroke();
+      ctx.strokeStyle='rgba(216,227,220,.12)';ctx.beginPath();ctx.arc(ox,oy,SR*.12,0,TAU);ctx.stroke();
+      ctx.fillStyle=col;ctx.beginPath();ctx.arc(ox+kx*SR,oy+ky*SR,SR*.4,0,TAU);ctx.fill();ctx.globalAlpha=1};
+    drawStick(sticks.L,'rgba(242,179,61,.5)',hx);
+    drawStick(sticks.R,'rgba(224,71,58,.55)',W-hx);
     if(!sticks.R.on&&G.t<25){ctx.globalAlpha=.45;ctx.fillStyle='rgba(216,227,220,.6)';ctx.font='600 13px "Exo 2",system-ui,sans-serif';ctx.textAlign='center';
-      ctx.fillText('держи — огонь, веди — прицел',W-110,H-110-SR-12);ctx.fillText('ходьба',110,H-110-SR-12);ctx.textAlign='start';ctx.globalAlpha=1}
+      ctx.fillText('держи — огонь, веди — прицел',W-hx,hy-SR-12);ctx.fillText('ходьба',hx,hy-SR-12);ctx.textAlign='start';ctx.globalAlpha=1}
   }
+  if(G.chaos!==null&&G.state==='play'){ctx.fillStyle=`rgba(224,40,30,${(.05+.04*Math.sin(G.t*4)+Math.min(.06,G.chaos/600)).toFixed(3)})`;ctx.fillRect(0,0,W,H)}
   const dmg=G.p.hurtT>0?G.p.hurtT/.35*.6:(G.p.hp/G.p.mhp<.3?.18+.1*Math.sin(G.t*6):0);
   $('#dmg').style.opacity=dmg.toFixed(2);
   drawMini();
@@ -727,8 +778,9 @@ function drawMini(){
   const s=mm.width/MW;mx.clearRect(0,0,mm.width,mm.height);mx.imageSmoothingEnabled=false;
   mx.drawImage(mmBase,0,0,mm.width,mm.height);
   const dot=(x,y,c,r)=>{mx.fillStyle=c;mx.fillRect(x*s-r,y*s-r,r*2,r*2)};
-  for(const n of G.nests)if(n.hp>0)dot(n.x/T,n.y/T,'#c45bff',4);
-  dot(exitT.x+.5,exitT.y+.5,G.exitOpen?'#9be04b':'#e0473a',4);
+  for(const n of G.nests)if(n.hp>0&&seenAt(n.tx,n.ty))dot(n.x/T,n.y/T,'#c45bff',4);
+  if(seenAt(exitT.x,exitT.y)||G.exitHint){const bl=G.exitHint&&!seenAt(exitT.x,exitT.y)?(Math.sin(G.t*6)>0):true;
+    if(bl)dot(exitT.x+.5,exitT.y+.5,G.exitOpen?'#9be04b':'#e0473a',4)}
   dot(G.p.x/T,G.p.y/T,'#f2b33d',3.5);
 }
 
@@ -741,9 +793,11 @@ function hud(force){
   if(hc.hpw!==hp+'/'+p.mhp){hc.hpw=hp+'/'+p.mhp;$('#hpf').style.width=(p.hp/p.mhp*100).toFixed(1)+'%'}
   setT('hpt',String(hp));setT('money','¢ '+S.money);setT('sec','СЕКТОР '+G.lv);
   const left=G.nests.filter(n=>n.hp>0).length;
-  setT('obj',G.exitOpen?'Выход открыт':`Гнёзд осталось: ${left}`);
+  setT('obj',G.exitOpen?'Выход открыт — найди его':`Гнёзд осталось: ${left}`);
   $('#obj').classList.toggle('open',G.exitOpen);
-  setT('wv',`Волна ${G.wave+1} через ${Math.ceil(G.waveT)} с`);
+  if(G.chaos!==null){const c=G.chaos|0,b=exitBonus();setT('wv',`ХАОС ${Math.floor(c/60)}:${String(c%60).padStart(2,'0')} · ${b?`бонус за выход ¢${b}`:'бонус сгорел'}`)}
+  else setT('wv',`Волна ${G.wave+1} через ${Math.ceil(G.waveT)} с`);
+  $('#wv').classList.toggle('chaos',G.chaos!==null);
 }
 let bnT=null;
 function banner(h,p){$('#bnh').textContent=h;$('#bnp').textContent=p||'';const b=$('#bn');b.classList.add('on');clearTimeout(bnT);bnT=setTimeout(()=>b.classList.remove('on'),2300)}
